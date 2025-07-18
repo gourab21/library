@@ -40,7 +40,7 @@
     <div class="flex items-center justify-center px-4 sm:px-4 lg:px-8">
         <div class="bg-white p-4 sm:p-6 rounded-lg shadow-lg w-full max-w-lg m-4 sm:m-6 px-4">
             <!-- Header Image -->
-            <img src="20250704_085411.jpg" alt="Hostel Image" class="header-img mb-6">
+            <img src="20250704_085411.jpg" alt="Library Image" class="header-img mb-6">
             
             <h1 class="text-2xl sm:text-3xl font-bold text-center text-purple-700 mb-6">Shree Bhavan Library</h1>
             <div class="space-y-4">
@@ -49,16 +49,19 @@
                     id="bookIdInput" 
                     placeholder="Enter Book ID" 
                     class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    aria-label="Enter Book ID"
                 >
                 <input 
                     type="text" 
                     id="bookNameInput" 
                     placeholder="Enter Book Name" 
                     class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    aria-label="Enter Book Name"
                 >
                 <select 
                     id="publisherInput" 
                     class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    aria-label="Select Publisher"
                 >
                     <option value="">Select Publisher</option>
                 </select>
@@ -127,33 +130,56 @@
 
             try {
                 // Fetch data from Google Sheets API (columns A:C from search sheet)
-                const response = await fetch(
+                const bookResponse = await fetch(
                     `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/search!A2:C?key=${API_KEY}`
                 );
-                const data = await response.json();
+                const bookData = await bookResponse.json();
 
-                if (data.error) {
+                if (bookData.error) {
                     resultDiv.innerHTML = '<p class="text-red-500">Error accessing Google Sheet. Check Sheet ID and API key.</p>';
                     return;
                 }
 
+                // Fetch issuance data from issue sheet (columns A:B)
+                const issueResponse = await fetch(
+                    `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/issue!A2:B?key=${API_KEY}`
+                );
+                const issueData = await issueResponse.json();
+
+                if (issueData.error) {
+                    resultDiv.innerHTML = '<p class="text-red-500">Error accessing issue sheet. Check Sheet ID and API key.</p>';
+                    return;
+                }
+
                 // Filter rows based on input
-                const rows = data.values || [];
+                const rows = bookData.values || [];
                 const matches = rows.filter(row => 
                     (bookId && row[0].toUpperCase() === bookId) || 
                     (bookName && row[1].toLowerCase() === bookName.toLowerCase()) ||
                     (publisher && row[2] && row[2] === publisher)
                 );
 
+                // Process issuance data
+                const issuedBooks = (issueData.values || []).reduce((acc, row) => {
+                    const [bookId, roll] = row;
+                    if (bookId && roll && roll.trim() !== '') {
+                        acc[bookId.toUpperCase()] = true;
+                    }
+                    return acc;
+                }, {});
+
                 if (matches.length > 0) {
                     let output = '<h2 class="text-lg sm:text-xl font-semibold mb-4">Results:</h2>';
                     output += '<ul class="space-y-2">';
                     matches.forEach(row => {
+                        const isIssued = issuedBooks[row[0].toUpperCase()];
+                        const cardColor = isIssued ? 'bg-red-100' : 'bg-green-100';
                         output += `
-                            <li class="p-3 bg-gray-100 rounded-lg">
+                            <li class="p-3 ${cardColor} rounded-lg">
                                 <span class="font-bold">Book ID:</span> ${row[0]}<br>
                                 <span class="font-bold">Book Name:</span> ${row[1]}<br>
-                                <span class="font-bold">Publisher:</span> ${row[2] || 'N/A'}
+                                <span class="font-bold">Publisher:</span> ${row[2] || 'N/A'}<br>
+                                <span class="font-bold">Status:</span> ${isIssued ? 'Issued' : 'Available'}
                             </li>
                         `;
                     });
